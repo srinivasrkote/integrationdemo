@@ -1,0 +1,528 @@
+[{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd3"
+  },
+  "policy_number": "POL-001-BASIC",
+  "policy_name": "Basic Health Coverage",
+  "payor_id": "PAYOR-001",
+  "description": "Basic health insurance with standard coverage",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "Z00.00",
+        "K59.00",
+        "M25.50",
+        "J06.9",
+        "I10"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "diagnostic test",
+        "preventive care"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 5000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 0,
+      "max_age": 150
+    }
+  },
+  "max_failed_conditions": 1,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.025Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.025Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd4"
+  },
+  "policy_number": "POL-002-PREMIUM",
+  "policy_name": "Premium Health Coverage",
+  "payor_id": "PAYOR-001",
+  "description": "Premium insurance with comprehensive coverage",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "Z00.00",
+        "K59.00",
+        "M25.50",
+        "J06.9",
+        "I10",
+        "E11.9",
+        "M54.5"
+      ],
+      "excluded_codes": [
+        "F20.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "diagnostic test",
+        "preventive care",
+        "specialist consultation",
+        "physical therapy"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 15000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 0,
+      "max_age": 150
+    },
+    "provider_network": {
+      "network_providers": [
+        "PROV-001",
+        "PROV-002",
+        "PROV-003"
+      ]
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.039Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.039Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd5"
+  },
+  "policy_number": "POL-003-SENIOR",
+  "policy_name": "Senior Care Plus",
+  "payor_id": "PAYOR-002",
+  "description": "Specialized coverage for senior citizens",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "I10",
+        "E11.9",
+        "M54.5",
+        "N39.0",
+        "H54.7"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "diagnostic test",
+        "specialist consultation",
+        "home care"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 12000
+    },
+    "prior_authorization": {
+      "required": true
+    },
+    "age_restrictions": {
+      "min_age": 65,
+      "max_age": 150
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.041Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.041Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd6"
+  },
+  "policy_number": "POL-004-FAMILY",
+  "policy_name": "Family Health Plan",
+  "payor_id": "PAYOR-001",
+  "description": "Comprehensive family coverage",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "Z00.00",
+        "K59.00",
+        "J06.9",
+        "I10",
+        "Z34.90",
+        "Z76.1"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "diagnostic test",
+        "preventive care",
+        "pediatric care",
+        "maternity care"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 20000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 0,
+      "max_age": 150
+    },
+    "frequency_limits": {
+      "max_per_year": 4
+    }
+  },
+  "max_failed_conditions": 1,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.043Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.043Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd7"
+  },
+  "policy_number": "POL-005-MENTAL",
+  "policy_name": "Mental Health Coverage",
+  "payor_id": "PAYOR-003",
+  "description": "Specialized mental health insurance",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "F32.9",
+        "F41.1",
+        "F43.10",
+        "F90.9",
+        "F31.9"
+      ],
+      "excluded_codes": [
+        "F20.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "therapy session",
+        "psychiatric consultation",
+        "counseling"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 8000
+    },
+    "prior_authorization": {
+      "required": true
+    },
+    "age_restrictions": {
+      "min_age": 5,
+      "max_age": 150
+    },
+    "provider_network": {
+      "network_providers": [
+        "PROV-004",
+        "PROV-005"
+      ]
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.044Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.044Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd8"
+  },
+  "policy_number": "POL-006-SPORTS",
+  "policy_name": "Sports Injury Coverage",
+  "payor_id": "PAYOR-002",
+  "description": "Coverage for sports-related injuries",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "S93.40",
+        "M25.50",
+        "S83.50",
+        "M54.5",
+        "S72.90"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "physical therapy",
+        "diagnostic test",
+        "orthopedic consultation",
+        "rehabilitation"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 10000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 12,
+      "max_age": 65
+    }
+  },
+  "max_failed_conditions": 1,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.046Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.046Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bd9"
+  },
+  "policy_number": "POL-007-CHRONIC",
+  "policy_name": "Chronic Care Management",
+  "payor_id": "PAYOR-001",
+  "description": "Long-term care for chronic conditions",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "E11.9",
+        "I10",
+        "J44.1",
+        "N18.6",
+        "I25.10"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "specialist consultation",
+        "medication management",
+        "home care"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 25000
+    },
+    "prior_authorization": {
+      "required": true
+    },
+    "age_restrictions": {
+      "min_age": 18,
+      "max_age": 150
+    },
+    "frequency_limits": {
+      "max_per_month": 2
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.047Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.047Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bda"
+  },
+  "policy_number": "POL-008-EMERGENCY",
+  "policy_name": "Emergency Care Only",
+  "payor_id": "PAYOR-003",
+  "description": "Emergency and urgent care coverage",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "R06.00",
+        "R50.9",
+        "S72.90",
+        "I46.9",
+        "R57.0"
+      ],
+      "excluded_codes": [
+        "Z00.00",
+        "F20.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "emergency care",
+        "urgent care",
+        "trauma care"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 50000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 0,
+      "max_age": 150
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.050Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.050Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bdb"
+  },
+  "policy_number": "POL-009-STUDENT",
+  "policy_name": "Student Health Plan",
+  "payor_id": "PAYOR-002",
+  "description": "Affordable health coverage for students",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "Z00.00",
+        "J06.9",
+        "K59.00",
+        "F41.1",
+        "S93.40"
+      ],
+      "excluded_codes": [
+        "F20.9",
+        "C78.9"
+      ]
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "preventive care",
+        "mental health counseling",
+        "sports injury"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 7500
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 16,
+      "max_age": 30
+    }
+  },
+  "max_failed_conditions": 1,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.052Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.052Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68dadef0f59f4b176f218bdc"
+  },
+  "policy_number": "POL-010-EXECUTIVE",
+  "policy_name": "Executive Health Package",
+  "payor_id": "PAYOR-001",
+  "description": "Comprehensive executive health coverage",
+  "coverage_conditions": {
+    "diagnosis_codes": {
+      "covered_codes": [
+        "Z00.00",
+        "I10",
+        "E11.9",
+        "M54.5",
+        "K59.00",
+        "F41.1",
+        "N39.0"
+      ],
+      "excluded_codes": []
+    },
+    "treatment_type": {
+      "covered_treatments": [
+        "routine checkup",
+        "diagnostic test",
+        "specialist consultation",
+        "preventive care",
+        "executive physical",
+        "concierge medicine"
+      ]
+    },
+    "amount_limits": {
+      "max_amount": 100000
+    },
+    "prior_authorization": {
+      "required": false
+    },
+    "age_restrictions": {
+      "min_age": 25,
+      "max_age": 150
+    },
+    "provider_network": {
+      "network_providers": [
+        "PROV-001",
+        "PROV-002",
+        "PROV-003",
+        "PROV-006"
+      ]
+    }
+  },
+  "max_failed_conditions": 0,
+  "is_active": true,
+  "created_date": {
+    "$date": "2025-09-29T19:33:04.053Z"
+  },
+  "last_updated": {
+    "$date": "2025-09-29T19:33:04.053Z"
+  }
+}]

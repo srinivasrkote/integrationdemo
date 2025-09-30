@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend Authentication</title>
+</head>
+<body>
+    <h1>Test Authentication</h1>
+    
+    <div>
+        <h2>Test Login</h2>
+        <input type="text" id="username" placeholder="Username" value="provider1">
+        <input type="password" id="password" placeholder="Password" value="password123">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div>
+        <h2>Test Profile</h2>
+        <button onclick="testProfile()">Test Profile</button>
+        <div id="profileResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api';
+        let credentials = '';
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/mongo/auth/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    credentials = btoa(`${username}:${password}`);
+                    localStorage.setItem('authCredentials', credentials);
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div style="color: green;">Login successful! User: ${data.user.username}, Role: ${data.user.role}</div>`;
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div style="color: red;">Login failed: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 
+                    `<div style="color: red;">Login error: ${error.message}</div>`;
+            }
+        }
+
+        async function testProfile() {
+            const storedCredentials = localStorage.getItem('authCredentials') || credentials;
+            
+            if (!storedCredentials) {
+                document.getElementById('profileResult').innerHTML = 
+                    '<div style="color: red;">No credentials stored. Please login first.</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/mongo/profile/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Basic ${storedCredentials}`,
+                    },
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('profileResult').innerHTML = 
+                        `<div style="color: green;">Profile retrieved! User: ${data.user.username}, Role: ${data.user.role}</div>`;
+                } else {
+                    document.getElementById('profileResult').innerHTML = 
+                        `<div style="color: red;">Profile failed: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('profileResult').innerHTML = 
+                    `<div style="color: red;">Profile error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

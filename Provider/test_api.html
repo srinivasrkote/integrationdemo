@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>MongoDB API Test</h1>
+    
+    <h2>Test Registration</h2>
+    <button onclick="testRegister()">Test Registration</button>
+    <div id="registerResult"></div>
+    
+    <h2>Test Login</h2>
+    <button onclick="testLogin()">Test Login</button>
+    <div id="loginResult"></div>
+    
+    <h2>Test Dashboard Stats</h2>
+    <button onclick="testDashboard()">Test Dashboard Stats</button>
+    <div id="dashboardResult"></div>
+
+    <script>
+        async function testRegister() {
+            try {
+                const response = await fetch('/api/mongo/register/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'testuser_' + Date.now(),
+                        email: 'test' + Date.now() + '@example.com',
+                        password: 'password123',
+                        first_name: 'Test',
+                        last_name: 'User',
+                        role: 'patient'
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('registerResult').innerHTML = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('registerResult').innerHTML = 'Error: ' + error.message;
+            }
+        }
+        
+        async function testLogin() {
+            try {
+                const response = await fetch('/api/mongo/auth/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'provider1',
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('loginResult').innerHTML = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 'Error: ' + error.message;
+            }
+        }
+        
+        async function testDashboard() {
+            try {
+                const response = await fetch('/api/mongo/dashboard/stats/');
+                const data = await response.json();
+                document.getElementById('dashboardResult').innerHTML = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('dashboardResult').innerHTML = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
