@@ -18,32 +18,43 @@ class PayorIntegrationService:
     """Service to handle payor system integration"""
     
     def __init__(self):
-        # These will be configurable via settings or environment variables
-        self.payor_base_url = getattr(settings, 'PAYOR_BASE_URL', 'https://fd9b073ae920.ngrok-free.app')
+        # Get payor URL from settings (loaded from .env)
+        # Remove '/api' suffix if present to get base URL
+        payor_url = getattr(settings, 'PAYOR_BASE_URL', 'https://e131ed05871e.ngrok-free.app/api')
+        if payor_url.endswith('/api'):
+            self.payor_base_url = payor_url[:-4]  # Remove '/api' suffix
+        else:
+            self.payor_base_url = payor_url
+            
         self.payor_email = getattr(settings, 'PAYOR_EMAIL', 'admin@payor.com')
         self.payor_password = getattr(settings, 'PAYOR_PASSWORD', 'admin123')
         self.timeout = 30
         
-        # Insurance ID to Payor mappings
+        # Insurance ID to Payor mappings (dynamically use current payor URL from .env)
         self.insurance_mappings = {
             'INS001': {
                 'payor_name': 'BlueCross BlueShield',
-                'payor_url': 'https://fd9b073ae920.ngrok-free.app',
+                'payor_url': self.payor_base_url,
                 'is_active': True
             },
             'INS002': {
                 'payor_name': 'Aetna Health',
-                'payor_url': 'https://fd9b073ae920.ngrok-free.app',
+                'payor_url': self.payor_base_url,
                 'is_active': True
             },
             'INS003': {
                 'payor_name': 'United Healthcare',
-                'payor_url': 'https://fd9b073ae920.ngrok-free.app',
+                'payor_url': self.payor_base_url,
                 'is_active': True
             },
             'HI12345': {
                 'payor_name': 'Health Insurance Premium',
-                'payor_url': 'https://fd9b073ae920.ngrok-free.app',
+                'payor_url': self.payor_base_url,
+                'is_active': True
+            },
+            'BC-789-456': {
+                'payor_name': 'BlueCross BlueShield',
+                'payor_url': self.payor_base_url,
                 'is_active': True
             }
         }

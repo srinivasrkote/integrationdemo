@@ -1,0 +1,161 @@
+================================================================================
+QUICK START GUIDE - SUBMIT CLAIM FOR JOHN DOE WITH MULTIPLE CODES
+================================================================================
+
+READY TO TEST ✓
+
+Step 1: Start Servers (if not running)
+---------------------------------------
+Terminal 1 - Django:
+cd C:\Users\sagar\integrationdemo\Provider
+.venv\Scripts\activate
+python manage.py runserver 0.0.0.0:8001
+
+Terminal 2 - Frontend (Optional if React built):
+cd C:\Users\sagar\integrationdemo\Provider\frontend
+npm run dev
+
+Step 2: Access Provider Dashboard
+----------------------------------
+1. Open: http://localhost:8001
+2. Login: provider2 / password@123
+3. Click "Submit New Claim" button
+
+Step 3: Fill Form
+-----------------
+Patient Name: John Doe
+Insurance ID: BC-789-456
+
+Step 4: Add Multiple Diagnosis Codes
+-------------------------------------
+1. Click "Medical Codes Reference" button
+2. Search "diabetes" → Click "E11.9"
+   ✓ Blue badge appears
+3. Search "hypertension" → Click "I10"
+   ✓ Second blue badge appears
+4. (Optional) Add more diagnosis codes
+
+Step 5: Add Multiple Procedure Codes
+-------------------------------------
+1. Click "CPT Codes" tab
+2. Search "office" → Click "99214"
+   ✓ Green badge appears
+3. (Optional) Add more procedure codes
+4. Close modal (click outside or ESC)
+
+Step 6: Complete & Submit
+--------------------------
+Amount: 350.00
+Date: 2025-10-03
+Notes: (Optional) "Multiple conditions visit"
+Click "Submit Claim"
+
+Expected Result:
+✓ Success message
+✓ Claim appears in table
+✓ No 403 error
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Issue: 403 Forbidden
+Fix: Server reloaded? Check Django logs show "changed, reloading"
+
+Issue: Modal won't open
+Fix: Hard refresh browser (Ctrl+Shift+R)
+
+Issue: Badges don't appear
+Fix: Check browser console (F12) for errors
+
+Issue: Can't remove badges
+Fix: Click the × button on the right side of badge
+
+================================================================================
+TEST BADGE INTERACTION
+================================================================================
+
+1. Add 3 diagnosis codes
+2. Click × on middle badge
+3. Verify it disappears
+4. Click Medical Codes Reference again
+5. Add the code back
+6. Verify it reappears
+
+This tests: Add → Remove → Re-add flow
+
+================================================================================
+VERIFY IN DATABASE (Optional)
+================================================================================
+
+MongoDB Shell:
+use hcms_provider_db
+db.claims.findOne({patient_name: "John Doe"})
+
+Check for:
+✓ diagnosis_codes: [{code, description}, ...]
+✓ procedure_codes: [{code, description}, ...]
+✓ diagnosis_code: "E11.9" (legacy field)
+✓ status: "submitted"
+
+================================================================================
+FILES TO REFERENCE
+================================================================================
+
+Comprehensive Testing:
+→ TEST_JOHN_DOE_CLAIM_MULTI_CODES.txt (5 test scenarios)
+
+Technical Details:
+→ FIXES_COMPLETE_SUMMARY.md (full implementation details)
+
+Dialog Fix:
+→ DIALOG_FIX_COMPLETE.md (modal opening issue)
+
+================================================================================
+QUICK VALIDATION CHECKLIST
+================================================================================
+
+☐ Django server running (port 8001)
+☐ Provider2 logged in
+☐ "Submit New Claim" button works
+☐ "Medical Codes Reference" button opens modal
+☐ Can search for codes
+☐ Clicking code adds blue/green badge
+☐ Can add multiple codes without closing modal
+☐ × button removes badges
+☐ Form validates (requires at least 1 diagnosis code)
+☐ Claim submits without 403 error
+☐ Success message displays
+☐ Claim appears in dashboard table
+
+================================================================================
+PATIENT INFO - JOHN DOE
+================================================================================
+
+Name: John Doe
+Insurance ID: BC-789-456 ← USE THIS
+Member ID: MEM-BC-001 (payor internal - don't use)
+
+Known Conditions:
+- E11.9: Type 2 Diabetes (diagnosed 2020)
+- I10: Essential Hypertension (diagnosed 2018)
+
+Active Policy: BC-789-456-123 (BlueCross Gold Plan)
+Coverage: 2024-01-01 to 2024-12-31
+Deductible Met: $1,200 | Out-of-Pocket Met: $2,500
+
+================================================================================
+SUCCESS!
+================================================================================
+
+When you see:
+✅ Colored badges with codes
+✅ Success message after submit
+✅ Claim in dashboard table
+✅ No console errors
+
+You've successfully tested the multiple codes feature!
+
+For more detailed testing, see TEST_JOHN_DOE_CLAIM_MULTI_CODES.txt
+
+================================================================================

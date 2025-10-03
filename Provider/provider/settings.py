@@ -27,7 +27,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-!4i!mh9^-24s(6z@uhu+x
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -111,9 +111,9 @@ def connect_mongodb():
 # Connect to MongoDB on startup
 try:
     connect_mongodb()
-    print("✅ Connected to MongoDB successfully!")
+    print("[SUCCESS] Connected to MongoDB successfully!")
 except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
+    print(f"[ERROR] MongoDB connection failed: {e}")
     print("Using SQLite as fallback database")
 
 
@@ -166,6 +166,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
@@ -176,6 +177,17 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
+# JWT Settings
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}
+
 # CORS settings for frontend integration
 CORS_ORIGINS_FROM_ENV = config('CORS_ORIGINS', default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:5173,http://127.0.0.1:5173')
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_FROM_ENV.split(',')]
@@ -184,3 +196,11 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Custom user model
 AUTH_USER_MODEL = 'accounts.User'
+
+# Provider-Payor Integration Settings
+# As per PROVIDER_INTEGRATION_GUIDE.md
+PAYOR_BASE_URL = config('PAYOR_BASE_URL', default='https://9323de5960fc.ngrok-free.app/api')
+PAYOR_API_KEY = config('PAYOR_API_KEY', default=None)  # Optional API key for authentication
+PROVIDER_ID = config('PROVIDER_ID', default='PROV-001')
+PROVIDER_NAME = config('PROVIDER_NAME', default='City Medical Center')
+PAYOR_WEBHOOK_SECRET = config('PAYOR_WEBHOOK_SECRET', default='default-webhook-secret-change-in-production')

@@ -1,5 +1,5 @@
 from django.contrib.auth.models import AbstractUser
-from djongo import models
+from django.db import models
 
 class User(AbstractUser):
     """Extended User model with role field"""

@@ -4,9 +4,14 @@ import { cn } from './utils';
 const DialogContext = createContext();
 
 export function Dialog({ open, onOpenChange, children }) {
+  // Separate trigger and content
+  const childArray = React.Children.toArray(children);
+  const trigger = childArray.find(child => child.type === DialogTrigger);
+  const content = childArray.find(child => child.type === DialogContent);
+  
   return (
     <DialogContext.Provider value={{ open, onOpenChange }}>
-      {children}
+      {trigger}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div 
@@ -14,7 +19,7 @@ export function Dialog({ open, onOpenChange, children }) {
             onClick={() => onOpenChange?.(false)}
           />
           <div className="relative z-50 max-h-[90vh] overflow-auto">
-            {children}
+            {content}
           </div>
         </div>
       )}

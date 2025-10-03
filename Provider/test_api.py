@@ -6,7 +6,7 @@ import json
 from requests.auth import HTTPBasicAuth
 
 # Base URL for the API
-BASE_URL = "http://127.0.0.1:8000/api"
+BASE_URL = "http://127.0.0.1:8001/api"
 
 # Test credentials
 PROVIDER_USERNAME = "provider1"

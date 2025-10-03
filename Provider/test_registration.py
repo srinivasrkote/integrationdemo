@@ -3,7 +3,7 @@ import json
 
 # Test the MongoDB registration endpoint
 def test_registration():
-    url = "http://127.0.0.1:8000/api/mongo/register-test/"
+    url = "http://127.0.0.1:8001/api/mongo/register-test/"
     
     test_user = {
         "username": "testuser123",

@@ -34,6 +34,10 @@ class User(Document):
     date_joined = fields.DateTimeField(default=datetime.now)
     last_login = fields.DateTimeField()
     
+    # Password reset fields (may exist in database)
+    reset_token = fields.StringField()
+    reset_token_expires = fields.DateTimeField()
+    
     meta = {
         'collection': 'users',
         'indexes': ['username', 'email', 'role']
@@ -86,9 +90,13 @@ class Claim(Document):
     payor_submission_date = fields.DateTimeField()      # When submitted to payor
     payor_response = fields.DictField()                  # Full payor response data
     
-    # Claim details
+    # Claim details - supporting multiple codes
+    diagnosis_codes = fields.ListField(fields.DictField(), default=list)  # List of {code, description}
+    procedure_codes = fields.ListField(fields.DictField(), default=list)  # List of {code, description}
+    
+    # Legacy single code fields (kept for backwards compatibility)
     diagnosis_code = fields.StringField(max_length=20)
-    diagnosis_description = fields.StringField(required=True)
+    diagnosis_description = fields.StringField()
     procedure_code = fields.StringField(max_length=20)
     procedure_description = fields.StringField()
     

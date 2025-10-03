@@ -23,6 +23,7 @@ import {
   Bell
 } from 'lucide-react';
 import apiService from '../../services/api';
+import MedicalCodesCheatsheet from '../MedicalCodesCheatsheet';
 
 function ProviderDashboard() {
   const [providerData, setProviderData] = useState(null);
@@ -40,10 +41,8 @@ function ProviderDashboard() {
   const [newClaim, setNewClaim] = useState({
     patient_name: '',
     insurance_id: '',
-    diagnosis_code: '',
-    diagnosis_description: '',
-    procedure_code: '',
-    procedure_description: '',
+    diagnosis_codes: [], // Changed to array
+    procedure_codes: [], // Changed to array
     amount_requested: '',
     date_of_service: '',
     notes: '',
@@ -253,11 +252,49 @@ function ProviderDashboard() {
     }
   };
 
+  const handleCodeSelect = (codeData) => {
+    if (codeData.type === 'icd10') {
+      // Add diagnosis code to array if not already present
+      const codeEntry = { code: codeData.code, description: codeData.description };
+      const exists = newClaim.diagnosis_codes.some(c => c.code === codeData.code);
+      if (!exists) {
+        setNewClaim({
+          ...newClaim,
+          diagnosis_codes: [...newClaim.diagnosis_codes, codeEntry]
+        });
+      }
+    } else if (codeData.type === 'cpt') {
+      // Add procedure code to array if not already present
+      const codeEntry = { code: codeData.code, description: codeData.description };
+      const exists = newClaim.procedure_codes.some(c => c.code === codeData.code);
+      if (!exists) {
+        setNewClaim({
+          ...newClaim,
+          procedure_codes: [...newClaim.procedure_codes, codeEntry]
+        });
+      }
+    }
+  };
+
+  const removeCode = (type, code) => {
+    if (type === 'diagnosis') {
+      setNewClaim({
+        ...newClaim,
+        diagnosis_codes: newClaim.diagnosis_codes.filter(c => c.code !== code)
+      });
+    } else if (type === 'procedure') {
+      setNewClaim({
+        ...newClaim,
+        procedure_codes: newClaim.procedure_codes.filter(c => c.code !== code)
+      });
+    }
+  };
+
   const handleSubmitClaim = async () => {
     try {
       // Validate required fields
-      if (!newClaim.patient_name || !newClaim.insurance_id || !newClaim.diagnosis_description || !newClaim.amount_requested) {
-        alert('Please fill in all required fields (Patient Name, Insurance ID, Diagnosis Description and Amount)');
+      if (!newClaim.patient_name || !newClaim.insurance_id || newClaim.diagnosis_codes.length === 0 || !newClaim.amount_requested) {
+        alert('Please fill in all required fields (Patient Name, Insurance ID, at least one Diagnosis Code and Amount)');
         return;
       }
 
@@ -265,15 +302,17 @@ function ProviderDashboard() {
         patient: 3, // Default patient ID for now
         patient_name: newClaim.patient_name,
         insurance_id: newClaim.insurance_id,
-        diagnosis_description: newClaim.diagnosis_description,
-        procedure_description: newClaim.procedure_description || '',
+        diagnosis_codes: newClaim.diagnosis_codes,
+        procedure_codes: newClaim.procedure_codes,
         amount_requested: parseFloat(newClaim.amount_requested),
-        diagnosis_code: newClaim.diagnosis_code || '',
-        procedure_code: newClaim.procedure_code || '',
         date_of_service: newClaim.date_of_service || null,
         notes: newClaim.notes || '',
         priority: newClaim.priority
       };
+
+      console.log('🚀 Submitting claim data:', JSON.stringify(claimData, null, 2));
+      console.log('📊 Diagnosis codes:', claimData.diagnosis_codes);
+      console.log('📋 Procedure codes:', claimData.procedure_codes);
 
       let response;
       if (selectedClaim && selectedClaim.id) {
@@ -293,9 +332,8 @@ function ProviderDashboard() {
         patient_name: '',
         insurance_id: '',
         diagnosis_code: '',
-        diagnosis_description: '',
-        procedure_code: '',
-        procedure_description: '',
+        diagnosis_codes: [],
+        procedure_codes: [],
         amount_requested: '',
         date_of_service: '',
         notes: '',
@@ -461,10 +499,8 @@ function ProviderDashboard() {
               setNewClaim({
                 patient_name: '',
                 insurance_id: '',
-                diagnosis_code: '',
-                diagnosis_description: '',
-                procedure_code: '',
-                procedure_description: '',
+                diagnosis_codes: [],
+                procedure_codes: [],
                 amount_requested: '',
                 date_of_service: '',
                 notes: '',
@@ -498,10 +534,15 @@ function ProviderDashboard() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl rounded-2xl">
             <DialogHeader>
-              <DialogTitle>{selectedClaim && selectedClaim.id ? 'Edit Claim' : 'Submit New Claim'}</DialogTitle>
-              <DialogDescription>
-                {selectedClaim && selectedClaim.id ? 'Update the insurance claim details' : 'Create a new insurance claim for patient treatment'}
-              </DialogDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle>{selectedClaim && selectedClaim.id ? 'Edit Claim' : 'Submit New Claim'}</DialogTitle>
+                  <DialogDescription>
+                    {selectedClaim && selectedClaim.id ? 'Update the insurance claim details' : 'Create a new insurance claim for patient treatment'}
+                  </DialogDescription>
+                </div>
+                <MedicalCodesCheatsheet onCodeSelect={handleCodeSelect} />
+              </div>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
@@ -521,37 +562,59 @@ function ProviderDashboard() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Diagnosis Code</Label>
-                <Input 
-                  placeholder="Enter ICD-10 code" 
-                  value={newClaim.diagnosis_code}
-                  onChange={(e) => setNewClaim({...newClaim, diagnosis_code: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Procedure Code</Label>
-                <Input 
-                  placeholder="Enter CPT code" 
-                  value={newClaim.procedure_code}
-                  onChange={(e) => setNewClaim({...newClaim, procedure_code: e.target.value})}
-                />
+              <div className="space-y-2 col-span-2">
+                <Label>Diagnosis Codes * (Click Medical Codes Reference to add)</Label>
+                <div className="border rounded-md p-3 min-h-[60px] flex flex-wrap gap-2">
+                  {newClaim.diagnosis_codes.length === 0 ? (
+                    <span className="text-gray-400 text-sm">No diagnosis codes added. Use Medical Codes Reference button above.</span>
+                  ) : (
+                    newClaim.diagnosis_codes.map((codeItem) => (
+                      <Badge 
+                        key={codeItem.code}
+                        variant="default"
+                        className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200"
+                      >
+                        <span className="font-semibold">{codeItem.code}</span>
+                        <span className="text-xs">-</span>
+                        <span className="text-xs">{codeItem.description.substring(0, 40)}...</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCode('diagnosis', codeItem.code)}
+                          className="ml-2 text-blue-600 hover:text-blue-900 font-bold"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="space-y-2 col-span-2">
-                <Label>Diagnosis Description *</Label>
-                <Input 
-                  placeholder="Description of diagnosis" 
-                  value={newClaim.diagnosis_description}
-                  onChange={(e) => setNewClaim({...newClaim, diagnosis_description: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Procedure Description</Label>
-                <Input 
-                  placeholder="Description of procedure" 
-                  value={newClaim.procedure_description}
-                  onChange={(e) => setNewClaim({...newClaim, procedure_description: e.target.value})}
-                />
+                <Label>Procedure Codes (Click Medical Codes Reference to add)</Label>
+                <div className="border rounded-md p-3 min-h-[60px] flex flex-wrap gap-2">
+                  {newClaim.procedure_codes.length === 0 ? (
+                    <span className="text-gray-400 text-sm">No procedure codes added. Use Medical Codes Reference button above.</span>
+                  ) : (
+                    newClaim.procedure_codes.map((codeItem) => (
+                      <Badge 
+                        key={codeItem.code}
+                        variant="default"
+                        className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 hover:bg-green-200"
+                      >
+                        <span className="font-semibold">{codeItem.code}</span>
+                        <span className="text-xs">-</span>
+                        <span className="text-xs">{codeItem.description.substring(0, 40)}...</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCode('procedure', codeItem.code)}
+                          className="ml-2 text-green-600 hover:text-green-900 font-bold"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Amount Requested *</Label>

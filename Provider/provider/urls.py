@@ -30,6 +30,8 @@ def api_root(request):
             'admin': '/admin/',
             'api': '/api/',
             'auth': '/api/auth/',
+            'token': '/api/token/',
+            'token_refresh': '/api/token/refresh/',
             'health': '/api/health/',
             'provider': '/api/provider/',
             'claims': '/api/claims/',
