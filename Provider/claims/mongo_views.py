@@ -14,8 +14,11 @@ from django.utils.decorators import method_decorator
 import json
 from datetime import datetime, timedelta
 from bson import ObjectId
+import logging
 from .mongo_models import User, Claim, ClaimDocument, ClaimStatusHistory
 from .payor_integration import payor_service
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_claim(claim):
@@ -498,6 +501,42 @@ class MongoRegisterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Validate date of birth if provided
+            if data.get('date_of_birth'):
+                try:
+                    date_of_birth = datetime.fromisoformat(data['date_of_birth'].replace('Z', '+00:00'))
+                    # Check if date is in the future
+                    if date_of_birth.date() > datetime.now().date():
+                        return Response(
+                            {'error': 'Date of birth cannot be in the future'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except ValueError:
+                    return Response(
+                        {'error': 'Invalid date format for date of birth'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Validate phone number if provided
+            if data.get('phone'):
+                phone = data['phone'].strip()
+                # Remove any non-digit characters
+                digits_only = ''.join(filter(str.isdigit, phone))
+                
+                # Check if phone contains only digits
+                if phone != digits_only:
+                    return Response(
+                        {'error': 'Phone number can only contain numbers'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Check if phone is exactly 10 digits
+                if len(digits_only) != 10:
+                    return Response(
+                        {'error': 'Phone number must be exactly 10 digits'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
             # Create new user
             user = User(
                 username=data['username'],
@@ -512,6 +551,7 @@ class MongoRegisterView(APIView):
                 date_joined=datetime.now()
             )
             
+            # Set date of birth if provided (already validated above)
             if data.get('date_of_birth'):
                 user.date_of_birth = datetime.fromisoformat(data['date_of_birth'].replace('Z', '+00:00'))
             
@@ -613,6 +653,17 @@ class MongoDashboardStatsView(APIView):
             recent_claims = Claim.objects(**base_query).order_by('-date_submitted')[:5]
             recent_claims_data = [serialize_claim(claim) for claim in recent_claims]
             
+            # Calculate total revenue (sum of approved claims)
+            total_revenue = 0
+            approved_claims_objects = Claim.objects(status='approved', **base_query)
+            for claim in approved_claims_objects:
+                if claim.amount_approved:
+                    total_revenue += float(claim.amount_approved)
+                elif claim.approved_amount:
+                    total_revenue += float(claim.approved_amount)
+                elif claim.amount_requested:
+                    total_revenue += float(claim.amount_requested)
+            
             # Calculate approval rate
             processed_claims = approved_claims + rejected_claims
             approval_rate = (approved_claims / processed_claims * 100) if processed_claims > 0 else 0
@@ -623,6 +674,7 @@ class MongoDashboardStatsView(APIView):
                 'approved_claims': approved_claims,
                 'rejected_claims': rejected_claims,
                 'approval_rate': round(approval_rate, 2),
+                'total_revenue': round(total_revenue, 2),
                 'recent_claims': recent_claims_data,
             })
             
@@ -684,5 +736,72 @@ class MongoUserProfileView(APIView):
         except Exception as e:
             return Response(
                 {'error': f'Failed to get profile: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class MongoPasswordResetView(APIView):
+    """MongoDB-based password reset view"""
+    authentication_classes = []  # Disable DRF authentication
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """Reset password for a user"""
+        try:
+            data = json.loads(request.body)
+            
+            # Required fields
+            email_or_username = data.get('emailOrUsername')
+            new_password = data.get('newPassword')
+            
+            if not email_or_username or not new_password:
+                return Response(
+                    {'error': 'Email/username and new password are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate password strength
+            if len(new_password) < 6:
+                return Response(
+                    {'error': 'Password must be at least 6 characters long'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find user by username or email
+            user = None
+            try:
+                # First try to find by username
+                user = User.objects.get(username=email_or_username)
+                logger.info(f"Found user by username: {email_or_username}")
+            except User.DoesNotExist:
+                try:
+                    # If not found by username, try by email
+                    user = User.objects.get(email=email_or_username)
+                    logger.info(f"Found user by email: {email_or_username}")
+                except User.DoesNotExist:
+                    logger.error(f"User not found by username or email: {email_or_username}")
+                    return Response(
+                        {'error': 'User not found'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            # Update password
+            user.password = new_password  # Store plain text for now (should be hashed in production)
+            user.save()
+            
+            logger.info(f"Password updated successfully for user: {user.username}")
+            
+            return Response({
+                'message': 'Password reset successfully',
+                'user': {
+                    'username': user.username,
+                    'email': user.email
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Password reset error: {e}", exc_info=True)
+            return Response(
+                {'error': f'Password reset failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

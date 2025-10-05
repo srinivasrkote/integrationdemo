@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { User, Building2, Shield, Heart, Stethoscope, Activity, Eye, EyeOff, Mail } from 'lucide-react';
+import { User, Building2, Shield, Heart, Stethoscope, Activity, Eye, EyeOff, Mail, X } from 'lucide-react';
 import apiService from '../services/api';
 
 export default function LoginForm({ onLogin, onShowRegister }) {
@@ -15,6 +15,18 @@ export default function LoginForm({ onLogin, onShowRegister }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Forgot password modal state
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [resetFormData, setResetFormData] = useState({
+    emailOrUsername: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -33,7 +45,7 @@ export default function LoginForm({ onLogin, onShowRegister }) {
     console.log('🚀 LoginForm: Starting login process for:', formData.username);
 
     try {
-      const response = await apiService.login(formData.username, formData.password);
+      const response = await apiService.login(formData.username, formData.password, userType);
       console.log('✅ LoginForm: Login response received:', response);
       
       // Call the onLogin callback with user data from MongoDB response
@@ -46,10 +58,107 @@ export default function LoginForm({ onLogin, onShowRegister }) {
       onLogin(userData);
     } catch (err) {
       console.error('❌ LoginForm: Login failed:', err);
-      setError(`Invalid credentials. Please try again. (${err.message})`);
+      
+      let errorMessage = 'Invalid credentials. Please try again.';
+      
+      // Handle specific error messages
+      if (err.message && err.message.includes('You cannot login as')) {
+        errorMessage = err.message;
+      } else if (err.message && err.message.includes('Role selection required')) {
+        errorMessage = 'Please select your role (Patient, Provider, or Payor) and try again.';
+      } else if (err.message) {
+        errorMessage = `Invalid credentials. Please try again. (${err.message})`;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleResetInputChange = (e) => {
+    const { name, value } = e.target;
+    setResetFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setResetError(''); // Clear error when user types
+  };
+
+  const handleForgotPassword = () => {
+    setShowForgotPasswordModal(true);
+    setResetFormData({
+      emailOrUsername: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+    setResetError('');
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setResetError('');
+
+    // Validate passwords match
+    if (resetFormData.newPassword !== resetFormData.confirmPassword) {
+      setResetError('Passwords do not match');
+      setResetLoading(false);
+      return;
+    }
+
+    // Validate password strength
+    if (resetFormData.newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters long');
+      setResetLoading(false);
+      return;
+    }
+
+    try {
+      // Call the actual password reset API
+      const response = await apiService.resetPassword(
+        resetFormData.emailOrUsername, 
+        resetFormData.newPassword
+      );
+      
+      console.log('Password reset successful:', response);
+      alert('Password reset successful! You can now login with your new password.');
+      setShowForgotPasswordModal(false);
+      
+      // Optionally pre-fill the username in the login form
+      setFormData(prev => ({
+        ...prev,
+        username: resetFormData.emailOrUsername
+      }));
+      
+    } catch (err) {
+      console.error('Password reset failed:', err);
+      
+      // Handle specific error messages
+      let errorMessage = err.message || 'Failed to reset password. Please try again.';
+      
+      if (errorMessage.includes('User not found')) {
+        errorMessage = 'No account found with this username or email address.';
+      } else if (errorMessage.includes('Password must be at least 6 characters')) {
+        errorMessage = 'Password must be at least 6 characters long.';
+      } else if (errorMessage.includes('Email/username and new password are required')) {
+        errorMessage = 'Please provide both username/email and new password.';
+      }
+      
+      setResetError(errorMessage);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const closeForgotPasswordModal = () => {
+    setShowForgotPasswordModal(false);
+    setResetFormData({
+      emailOrUsername: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+    setResetError('');
   };
 
   const getUserTypeIcon = (type) => {
@@ -78,24 +187,7 @@ export default function LoginForm({ onLogin, onShowRegister }) {
     }
   };
 
-  // Pre-filled credentials for testing
-  const getTestCredentials = (type) => {
-    switch (type) {
-      case 'patient':
-        return { username: 'patient1', password: 'password123' };
-      case 'provider':
-        return { username: 'provider1', password: 'password123' };
-      case 'payor':
-        return { username: 'payor1', password: 'password123' };
-      default:
-        return { username: '', password: '' };
-    }
-  };
 
-  const fillTestCredentials = () => {
-    const credentials = getTestCredentials(userType);
-    setFormData(credentials);
-  };
 
 
 
@@ -150,13 +242,16 @@ export default function LoginForm({ onLogin, onShowRegister }) {
             <CardContent className="space-y-6">
               {/* User Type Selection */}
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-gray-700">I am a:</Label>
+                <Label className="text-sm font-medium text-gray-700">I am a: <span className="text-red-500">*</span></Label>
                 <div className="grid grid-cols-3 gap-2">
                   {['patient', 'provider', 'payor'].map((type) => (
                     <button
                       key={type}
                       type="button"
-                      onClick={() => setUserType(type)}
+                      onClick={() => {
+                        setUserType(type);
+                        setError(''); // Clear error when user changes role
+                      }}
                       className={`p-3 rounded-xl border-2 transition-all duration-200 text-sm font-medium ${
                         userType === type
                           ? getUserTypeColor(type)
@@ -181,7 +276,7 @@ export default function LoginForm({ onLogin, onShowRegister }) {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">Username/Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -190,7 +285,7 @@ export default function LoginForm({ onLogin, onShowRegister }) {
                       type="text"
                       value={formData.username}
                       onChange={handleInputChange}
-                      placeholder="Enter your username"
+                      placeholder="Enter your username or email"
                       className="pl-10 rounded-xl"
                       required
                     />
@@ -220,17 +315,11 @@ export default function LoginForm({ onLogin, onShowRegister }) {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
+                <div className="flex justify-end items-center text-sm">
                   <button
                     type="button"
-                    onClick={fillTestCredentials}
-                    className="text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Use test credentials
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:text-gray-700"
+                    onClick={handleForgotPassword}
+                    className="text-gray-600 hover:text-gray-700 hover:underline transition-all"
                   >
                     Forgot password?
                   </button>
@@ -270,6 +359,119 @@ export default function LoginForm({ onLogin, onShowRegister }) {
           </Card>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-semibold text-gray-900">Reset Password</h3>
+              <button
+                onClick={closeForgotPasswordModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleResetPasswordSubmit} className="p-6 space-y-4">
+              {resetError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {resetError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="emailOrUsername">Email or Username</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="emailOrUsername"
+                    name="emailOrUsername"
+                    type="text"
+                    value={resetFormData.emailOrUsername}
+                    onChange={handleResetInputChange}
+                    placeholder="Enter your email or username"
+                    className="pl-10 rounded-xl"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="newPassword"
+                    name="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    value={resetFormData.newPassword}
+                    onChange={handleResetInputChange}
+                    placeholder="Enter new password"
+                    className="pr-10 rounded-xl"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={resetFormData.confirmPassword}
+                    onChange={handleResetInputChange}
+                    placeholder="Confirm new password"
+                    className="pr-10 rounded-xl"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <Button
+                  type="button"
+                  onClick={closeForgotPasswordModal}
+                  variant="outline"
+                  className="flex-1 rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white rounded-xl"
+                >
+                  {resetLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Resetting...</span>
+                    </div>
+                  ) : (
+                    'Reset Password'
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

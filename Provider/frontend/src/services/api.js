@@ -4,46 +4,82 @@ const API_BASE_URL = '/api';
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
-    this.credentials = null;
   }
 
-  // Set authentication credentials
-  setCredentials(username, password) {
-    this.credentials = btoa(`${username}:${password}`);
-    localStorage.setItem('authCredentials', this.credentials);
+  // Set JWT tokens
+  setTokens(accessToken, refreshToken) {
+    localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('refreshToken', refreshToken);
   }
 
-  // Get stored credentials
-  getCredentials() {
-    if (!this.credentials) {
-      this.credentials = localStorage.getItem('authCredentials');
-    }
-    return this.credentials;
+  // Get access token
+  getAccessToken() {
+    return localStorage.getItem('accessToken');
   }
 
-  // Clear credentials (logout)
+  // Get refresh token
+  getRefreshToken() {
+    return localStorage.getItem('refreshToken');
+  }
+
+  // Clear tokens (logout)
+  clearTokens() {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  }
+
+  // Alias for clearTokens (for compatibility)
   clearCredentials() {
-    this.credentials = null;
-    localStorage.removeItem('authCredentials');
+    this.clearTokens();
+  }
+
+  // Refresh access token
+  async refreshAccessToken() {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/auth/token/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Token refresh failed');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('accessToken', data.access);
+      return data.access;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      this.clearTokens();
+      throw error;
+    }
   }
 
   // Make authenticated request
   async request(endpoint, options = {}) {
-    const credentials = this.getCredentials();
+    let accessToken = this.getAccessToken();
     
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(credentials && { 'Authorization': `Basic ${credentials}` }),
-        ...options.headers,
-      },
-      ...options,
-    };
+    const makeRequest = async (token) => {
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+          ...options.headers,
+        },
+        ...options,
+      };
 
-    try {
       console.log(`🌐 Making request to: ${this.baseURL}${endpoint}`);
-      console.log(`🔐 Using credentials: ${credentials ? 'YES' : 'NO'}`);
-      console.log(`📋 Request config:`, config);
+      console.log(`🔐 Using JWT: ${token ? 'YES' : 'NO'}`);
       
       const response = await fetch(`${this.baseURL}${endpoint}`, config);
       
@@ -53,9 +89,11 @@ class ApiService {
         const responseText = await response.text();
         console.log(`❌ Error response body:`, responseText);
         
-        if (response.status === 401 || response.status === 403) {
-          // Don't automatically clear credentials here - let the calling code decide
-          throw new Error('Authentication failed');
+        if (response.status === 401) {
+          throw new Error('UNAUTHORIZED');
+        }
+        if (response.status === 403) {
+          throw new Error('FORBIDDEN');
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -63,38 +101,88 @@ class ApiService {
       const data = await response.json();
       console.log(`✅ Request successful to: ${endpoint}`, data);
       return data;
+    };
+
+    try {
+      return await makeRequest(accessToken);
     } catch (error) {
-      console.error(`💥 Request error for ${endpoint}:`, error);
+      // If unauthorized, try refreshing token once
+      if (error.message === 'UNAUTHORIZED' && this.getRefreshToken()) {
+        console.log('🔄 Token expired, refreshing...');
+        try {
+          const newToken = await this.refreshAccessToken();
+          return await makeRequest(newToken);
+        } catch (refreshError) {
+          console.error('💥 Token refresh failed:', refreshError);
+          this.clearTokens();
+          throw new Error('Session expired. Please login again.');
+        }
+      }
       throw error;
     }
   }
 
-  // Authentication with MongoDB
-  async login(username, password) {
+  // Authentication with JWT
+  async login(username, password, role) {
     try {
-      console.log('🔐 Frontend Login attempt for:', username);
-      console.log('🌐 Making request to:', `${this.baseURL}/mongo/auth/`);
+      console.log('🔐 JWT Login attempt for:', username, 'as role:', role);
+      console.log('🌐 Making request to:', `${this.baseURL}/auth/token/`);
       
-      const response = await fetch(`${this.baseURL}/mongo/auth/`, {
+      const response = await fetch(`${this.baseURL}/auth/token/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role }),
       });
 
       console.log('📡 Response status:', response.status);
-      console.log('📡 Response headers:', response.headers);
+      
+      // Get response text first
+      const responseText = await response.text();
+      console.log('📄 Response text:', responseText);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Login failed - Error data:', errorData);
-        throw new Error(errorData.error || 'Login failed');
+        let errorMessage = 'Invalid credentials';
+        
+        // Try to parse error response as JSON
+        if (responseText) {
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorData.detail || errorData.message || 'Invalid credentials';
+          } catch (parseError) {
+            console.warn('⚠️ Could not parse error response as JSON:', parseError);
+            errorMessage = responseText || 'Invalid credentials';
+          }
+        }
+        
+        console.error('❌ Login failed - Error:', errorMessage);
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log('✅ Login successful - Response data:', data);
-      this.setCredentials(username, password);
+      // Try to parse success response as JSON
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Could not parse success response as JSON:', parseError);
+        throw new Error('Invalid response format from server');
+      }
+      
+      console.log('✅ Login successful - JWT tokens received');
+      
+      // Store tokens
+      this.setTokens(data.access, data.refresh);
+      
+      // Store user info
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+      
       return data;
     } catch (error) {
       console.error('💥 Login error:', error);
@@ -150,8 +238,56 @@ class ApiService {
   }
 
   async logout() {
-    this.clearCredentials();
+    this.clearTokens();
     return Promise.resolve();
+  }
+
+  // Password Reset
+  async resetPassword(emailOrUsername, newPassword) {
+    try {
+      console.log('Sending password reset request for:', emailOrUsername);
+      
+      const response = await fetch(`${this.baseURL}/mongo/password-reset/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailOrUsername: emailOrUsername,
+          newPassword: newPassword
+        }),
+      });
+
+      console.log('Password reset response status:', response.status);
+
+      // Get response text first
+      const responseText = await response.text();
+      console.log('Password reset response text:', responseText);
+
+      if (!response.ok) {
+        let errorMessage = 'Password reset failed';
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          // If we can't parse JSON, use the raw text
+          errorMessage = responseText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Try to parse the successful response
+      try {
+        const data = JSON.parse(responseText);
+        return data;
+      } catch (jsonError) {
+        console.error('Failed to parse success response:', jsonError);
+        throw new Error('Invalid response format from server');
+      }
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
+    }
   }
 
   // MongoDB User Profile
@@ -179,7 +315,9 @@ class ApiService {
   }
 
   async createClaim(claimData) {
-    return this.request('/mongo/claims/', {
+    // Use the new provider-payor integration endpoint for claim submission
+    // This will save locally AND submit to payor system
+    return this.request('/provider/submit-claim/', {
       method: 'POST',
       body: JSON.stringify(claimData),
     });

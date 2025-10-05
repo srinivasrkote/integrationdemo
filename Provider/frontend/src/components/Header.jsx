@@ -74,7 +74,9 @@ export default function Header({ user, onLogout }) {
               {getIcon()}
             </div>
             <div className="text-sm">
-              <p className="font-medium text-gray-900 capitalize">{user.username}</p>
+              <p className="font-medium text-gray-900 capitalize">
+                {user.profile?.first_name || user.username}
+              </p>
               <p className="text-gray-500 capitalize">{user.type}</p>
             </div>
           </div>
@@ -83,7 +85,7 @@ export default function Header({ user, onLogout }) {
             variant="outline" 
             size="sm" 
             onClick={handleLogout}
-            className="rounded-xl hover:bg-red-50 hover:border-red-300 hover:text-red-700"
+            className="rounded-xl bg-red-50 border-red-300 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800"
           >
             <LogOut className="h-4 w-4 mr-1" />
             Sign Out

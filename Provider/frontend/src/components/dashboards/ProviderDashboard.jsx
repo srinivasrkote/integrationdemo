@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -23,6 +23,7 @@ import {
   Bell
 } from 'lucide-react';
 import apiService from '../../services/api';
+import MedicalCodesCheatsheet from '../MedicalCodesCheatsheet';
 
 function ProviderDashboard() {
   const [providerData, setProviderData] = useState(null);
@@ -33,6 +34,9 @@ function ProviderDashboard() {
   const [error, setError] = useState('');
   const [showSubmitClaim, setShowSubmitClaim] = useState(false);
   const [showClaimDetails, setShowClaimDetails] = useState(false);
+  const [showAllClaims, setShowAllClaims] = useState(false);
+  const [claimsPerPage, setClaimsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedClaim, setSelectedClaim] = useState(null);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -40,10 +44,8 @@ function ProviderDashboard() {
   const [newClaim, setNewClaim] = useState({
     patient_name: '',
     insurance_id: '',
-    diagnosis_code: '',
-    diagnosis_description: '',
-    procedure_code: '',
-    procedure_description: '',
+    diagnosis_codes: [], // Changed to array
+    procedure_codes: [], // Changed to array
     amount_requested: '',
     date_of_service: '',
     notes: '',
@@ -52,6 +54,53 @@ function ProviderDashboard() {
 
   // Dynamic notifications based on user data and claims
   const [notifications, setNotifications] = useState([]);
+  
+  // Helper functions for persistent notification read state
+  const getReadNotificationIds = () => {
+    try {
+      const saved = localStorage.getItem('readNotificationIds');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const saveReadNotificationIds = (readIds) => {
+    try {
+      localStorage.setItem('readNotificationIds', JSON.stringify([...readIds]));
+    } catch (error) {
+      console.error('Failed to save read notification IDs:', error);
+    }
+  };
+
+  const markNotificationAsRead = (notificationId) => {
+    const readIds = getReadNotificationIds();
+    readIds.add(notificationId);
+    saveReadNotificationIds(readIds);
+  };
+
+  // Request notification permission on load
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('Notification permission:', permission);
+      });
+    }
+  }, []);
+
+  // Prevent body scroll when dialogs are open
+  useEffect(() => {
+    if (showAllClaims || showClaimDetails || showAllNotifications || showSubmitClaim) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showAllClaims, showClaimDetails, showAllNotifications, showSubmitClaim]);
 
   // Generate notifications based on claims data
   const generateNotifications = (claimsData) => {
@@ -98,17 +147,87 @@ function ProviderDashboard() {
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Set up auto-refresh for claim status updates every 30 seconds
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing claims data...');
+      loadClaimsData();
+    }, 30000); // 30 seconds
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Update notifications when claims data changes
   useEffect(() => {
     const newNotifications = generateNotifications(claims);
-    setNotifications(newNotifications);
+    
+    // Preserve read status using localStorage
+    const readIds = getReadNotificationIds();
+    const updatedNotifications = newNotifications.map(newNotif => {
+      const wasRead = readIds.has(newNotif.id);
+      return { ...newNotif, unread: !wasRead };
+    });
+    
+    setNotifications(updatedNotifications);
     
     // Count unread notifications
-    const unread = newNotifications.filter(n => n.unread).length;
+    const unread = updatedNotifications.filter(n => n.unread).length;
     setUnreadCount(unread);
   }, [claims]);
+
+  // Separate function to load only claims data (for auto-refresh)
+  const loadClaimsData = async () => {
+    try {
+      console.log('📋 Loading claims data...');
+      const claimsResponse = await apiService.getClaims();
+      console.log('✅ Claims refreshed:', claimsResponse);
+      
+      const newClaims = claimsResponse.results || claimsResponse || [];
+      
+      // Check if any claim status has changed
+      const statusChanges = [];
+      newClaims.forEach(newClaim => {
+        const existingClaim = claims.find(c => c.id === newClaim.id);
+        if (existingClaim && existingClaim.status !== newClaim.status) {
+          statusChanges.push({
+            claim_id: newClaim.claim_number || newClaim.id,
+            old_status: existingClaim.status,
+            new_status: newClaim.status,
+            patient_name: newClaim.patient_name
+          });
+        }
+      });
+      
+      // Show notifications for status changes
+      if (statusChanges.length > 0) {
+        statusChanges.forEach(change => {
+          console.log(`🔄 Claim status updated: ${change.claim_id} ${change.old_status} → ${change.new_status}`);
+          
+          // Show browser notification if permitted
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`Claim Status Updated`, {
+              body: `Claim ${change.claim_id} for ${change.patient_name} is now ${change.new_status}`,
+              icon: '/favicon.ico'
+            });
+          }
+        });
+      }
+      
+      setClaims(newClaims);
+      
+      // Also refresh stats
+      try {
+        const statsResponse = await apiService.getDashboardStats();
+        setStats(statsResponse);
+      } catch (statsError) {
+        console.warn('Stats refresh failed:', statsError);
+      }
+      
+    } catch (error) {
+      console.error('❌ Claims refresh failed:', error);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -253,49 +372,148 @@ function ProviderDashboard() {
     }
   };
 
+  const handleCodeSelect = (codeData) => {
+    if (codeData.type === 'icd10') {
+      // Add diagnosis code to array if not already present
+      const codeEntry = { code: codeData.code, description: codeData.description };
+      const exists = newClaim.diagnosis_codes.some(c => c.code === codeData.code);
+      if (!exists) {
+        setNewClaim({
+          ...newClaim,
+          diagnosis_codes: [...newClaim.diagnosis_codes, codeEntry]
+        });
+      }
+    } else if (codeData.type === 'cpt') {
+      // Add procedure code to array if not already present
+      const codeEntry = { 
+        code: codeData.code, 
+        description: codeData.description,
+        price: codeData.price // Store price with the code
+      };
+      const exists = newClaim.procedure_codes.some(c => c.code === codeData.code);
+      if (!exists) {
+        const newProcedureCodes = [...newClaim.procedure_codes, codeEntry];
+        
+        // Calculate total amount from all procedure codes
+        let totalAmount = parseFloat(newClaim.amount_requested) || 0;
+        
+        // Add price of new procedure if it has a price
+        if (codeData.price) {
+          const numericPrice = parseFloat(codeData.price.replace(/[^0-9.]/g, ''));
+          totalAmount += numericPrice;
+        }
+        
+        setNewClaim({
+          ...newClaim,
+          procedure_codes: newProcedureCodes,
+          amount_requested: totalAmount.toString()
+        });
+      }
+    }
+  };
+
+  const removeCode = (type, code) => {
+    if (type === 'diagnosis') {
+      setNewClaim({
+        ...newClaim,
+        diagnosis_codes: newClaim.diagnosis_codes.filter(c => c.code !== code)
+      });
+    } else if (type === 'procedure') {
+      // Find the procedure being removed to get its price
+      const procedureToRemove = newClaim.procedure_codes.find(c => c.code === code);
+      const updatedProcedureCodes = newClaim.procedure_codes.filter(c => c.code !== code);
+      
+      // Calculate new total amount by subtracting the removed procedure's price
+      let totalAmount = parseFloat(newClaim.amount_requested) || 0;
+      
+      if (procedureToRemove && procedureToRemove.price) {
+        const numericPrice = parseFloat(procedureToRemove.price.replace(/[^0-9.]/g, ''));
+        totalAmount = Math.max(0, totalAmount - numericPrice); // Ensure amount doesn't go negative
+      }
+      
+      setNewClaim({
+        ...newClaim,
+        procedure_codes: updatedProcedureCodes,
+        amount_requested: totalAmount.toString()
+      });
+    }
+  };
+
   const handleSubmitClaim = async () => {
     try {
+      setLoading(true); // Set loading state
+      
       // Validate required fields
-      if (!newClaim.patient_name || !newClaim.insurance_id || !newClaim.diagnosis_description || !newClaim.amount_requested) {
-        alert('Please fill in all required fields (Patient Name, Insurance ID, Diagnosis Description and Amount)');
+      if (!newClaim.patient_name || !newClaim.insurance_id || newClaim.diagnosis_codes.length === 0 || !newClaim.amount_requested) {
+        alert('Please fill in all required fields (Patient Name, Insurance ID, at least one Diagnosis Code and Amount)');
+        setLoading(false);
         return;
+      }
+
+      // Validate date of service is not in the future
+      if (newClaim.date_of_service) {
+        const selectedDate = new Date(newClaim.date_of_service);
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // Set to end of today
+        
+        if (selectedDate > today) {
+          alert('Date of Service cannot be in the future. Please select a date that is today or earlier.');
+          setLoading(false);
+          return;
+        }
       }
 
       const claimData = {
         patient: 3, // Default patient ID for now
         patient_name: newClaim.patient_name,
         insurance_id: newClaim.insurance_id,
-        diagnosis_description: newClaim.diagnosis_description,
-        procedure_description: newClaim.procedure_description || '',
+        diagnosis_codes: newClaim.diagnosis_codes,
+        procedure_codes: newClaim.procedure_codes,
         amount_requested: parseFloat(newClaim.amount_requested),
-        diagnosis_code: newClaim.diagnosis_code || '',
-        procedure_code: newClaim.procedure_code || '',
         date_of_service: newClaim.date_of_service || null,
         notes: newClaim.notes || '',
         priority: newClaim.priority
       };
 
+      console.log('🚀 Submitting claim data:', JSON.stringify(claimData, null, 2));
+      console.log('📊 Diagnosis codes:', claimData.diagnosis_codes);
+      console.log('📋 Procedure codes:', claimData.procedure_codes);
+      console.log('🔍 Selected claim for edit check:', selectedClaim);
+      console.log('🆔 Selected claim ID:', selectedClaim?.id);
+      console.log('🔄 Is this an update?', !!(selectedClaim && selectedClaim.id));
+
       let response;
       if (selectedClaim && selectedClaim.id) {
         // Update existing claim
+        console.log('🔄 Updating claim with ID:', selectedClaim.id);
+        console.log('📤 Update data being sent:', JSON.stringify(claimData, null, 2));
         response = await apiService.updateClaim(selectedClaim.id, claimData);
-        console.log('Claim updated:', response);
+        console.log('✅ Claim updated successfully:', response);
         alert('Claim updated successfully!');
       } else {
         // Create new claim
         response = await apiService.createClaim(claimData);
-        console.log('Claim created:', response);
-        alert('Claim submitted successfully!');
+        console.log('✅ Claim created:', response);
+        
+        // Show success message with claim details
+        const claimId = response.claim_number || response.claim_id || 'New Claim';
+        alert(`✅ Claim submitted successfully!\n\nClaim ID: ${claimId}\nPatient: ${claimData.patient_name}\nAmount: $${claimData.amount_requested}\nStatus: Submitted to Payor\n\nYou will be notified when the payor reviews your claim.`);
+        
+        // Show browser notification if permitted
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Claim Submitted Successfully', {
+            body: `Claim ${claimId} for ${claimData.patient_name} has been submitted to the payor system`,
+            icon: '/favicon.ico'
+          });
+        }
       }
       
       // Reset form and close dialog
       setNewClaim({
         patient_name: '',
         insurance_id: '',
-        diagnosis_code: '',
-        diagnosis_description: '',
-        procedure_code: '',
-        procedure_description: '',
+        diagnosis_codes: [],
+        procedure_codes: [],
         amount_requested: '',
         date_of_service: '',
         notes: '',
@@ -308,8 +526,26 @@ function ProviderDashboard() {
       loadDashboardData();
       
     } catch (error) {
-      console.error('Error submitting claim:', error);
-      alert(`Error ${selectedClaim && selectedClaim.id ? 'updating' : 'submitting'} claim. Please try again.`);
+      console.error('Error submitting/updating claim:', error);
+      console.error('Error details:', error.message, error.stack);
+      
+      let errorMessage = `Error ${selectedClaim && selectedClaim.id ? 'updating' : 'submitting'} claim. Please try again.`;
+      
+      // Handle specific error types
+      if (error.message.includes('Session expired')) {
+        errorMessage = 'Your session has expired. Please log in again.';
+        // Optionally redirect to login
+      } else if (error.message.includes('UNAUTHORIZED')) {
+        errorMessage = 'You are not authorized to perform this action. Please log in again.';
+      } else if (error.message.includes('FORBIDDEN')) {
+        errorMessage = 'You do not have permission to perform this action.';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setLoading(false); // Ensure loading state is cleared
     }
   };
 
@@ -319,20 +555,52 @@ function ProviderDashboard() {
   };
 
   const handleEditClaim = (claim) => {
+    console.log('🔧 Edit claim triggered with:', claim);
+    console.log('🆔 Claim ID from edit:', claim?.id);
+    console.log('📋 Full claim object:', JSON.stringify(claim, null, 2));
+    
     // Pre-populate the form with existing claim data
+    const formatCodes = (codes, descriptions) => {
+      if (!codes) return [];
+      if (Array.isArray(codes)) {
+        return codes.map((code, index) => {
+          if (typeof code === 'object' && code.code) {
+            // Already in correct format
+            return code;
+          } else {
+            // Convert simple string codes to object format
+            return {
+              code: code,
+              description: descriptions && descriptions[index] ? descriptions[index] : ''
+            };
+          }
+        });
+      }
+      // Single code
+      return [{
+        code: codes,
+        description: descriptions || ''
+      }];
+    };
+
     setNewClaim({
       patient_name: claim.patient_name || '',
       insurance_id: claim.insurance_id || '',
-      diagnosis_code: claim.diagnosis_code || '',
-      diagnosis_description: claim.diagnosis_description || '',
-      procedure_code: claim.procedure_code || '',
-      procedure_description: claim.procedure_description || '',
+      diagnosis_codes: formatCodes(
+        claim.diagnosis_codes || claim.diagnosis_code,
+        claim.diagnosis_descriptions || claim.diagnosis_description
+      ),
+      procedure_codes: formatCodes(
+        claim.procedure_codes || claim.procedure_code,
+        claim.procedure_descriptions || claim.procedure_description
+      ),
       amount_requested: claim.amount_requested?.toString() || '',
       date_of_service: claim.date_of_service || '',
       notes: claim.notes || '',
       priority: claim.priority || 'medium'
     });
     setSelectedClaim(claim); // Store the claim being edited
+    console.log('✅ Selected claim set to:', claim);
     setShowSubmitClaim(true);
   };
 
@@ -344,6 +612,13 @@ function ProviderDashboard() {
     }));
     setNotifications(updatedNotifications);
     setUnreadCount(0);
+    
+    // Add all notification IDs to localStorage
+    const readIds = getReadNotificationIds();
+    notifications.forEach(notif => {
+      readIds.add(notif.id);
+    });
+    saveReadNotificationIds(readIds);
   };
 
   const handleViewAllNotifications = () => {
@@ -461,10 +736,8 @@ function ProviderDashboard() {
               setNewClaim({
                 patient_name: '',
                 insurance_id: '',
-                diagnosis_code: '',
-                diagnosis_description: '',
-                procedure_code: '',
-                procedure_description: '',
+                diagnosis_codes: [],
+                procedure_codes: [],
                 amount_requested: '',
                 date_of_service: '',
                 notes: '',
@@ -498,10 +771,15 @@ function ProviderDashboard() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl rounded-2xl">
             <DialogHeader>
-              <DialogTitle>{selectedClaim && selectedClaim.id ? 'Edit Claim' : 'Submit New Claim'}</DialogTitle>
-              <DialogDescription>
-                {selectedClaim && selectedClaim.id ? 'Update the insurance claim details' : 'Create a new insurance claim for patient treatment'}
-              </DialogDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle>{selectedClaim && selectedClaim.id ? 'Edit Claim' : 'Submit New Claim'}</DialogTitle>
+                  <DialogDescription>
+                    {selectedClaim && selectedClaim.id ? 'Update the insurance claim details' : 'Create a new insurance claim for patient treatment'}
+                  </DialogDescription>
+                </div>
+                <MedicalCodesCheatsheet onCodeSelect={handleCodeSelect} />
+              </div>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
@@ -521,37 +799,67 @@ function ProviderDashboard() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Diagnosis Code</Label>
-                <Input 
-                  placeholder="Enter ICD-10 code" 
-                  value={newClaim.diagnosis_code}
-                  onChange={(e) => setNewClaim({...newClaim, diagnosis_code: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Procedure Code</Label>
-                <Input 
-                  placeholder="Enter CPT code" 
-                  value={newClaim.procedure_code}
-                  onChange={(e) => setNewClaim({...newClaim, procedure_code: e.target.value})}
-                />
+              <div className="space-y-2 col-span-2">
+                <Label>Diagnosis Codes * (Click Medical Codes Reference to add)</Label>
+                <div className="border rounded-md p-3 min-h-[60px] flex flex-wrap gap-2">
+                  {newClaim.diagnosis_codes.length === 0 ? (
+                    <span className="text-gray-400 text-sm">No diagnosis codes added. Use Medical Codes Reference button above.</span>
+                  ) : (
+                    newClaim.diagnosis_codes.map((codeItem) => (
+                      <Badge 
+                        key={codeItem.code || codeItem}
+                        variant="default"
+                        className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200"
+                      >
+                        <span className="font-semibold">{codeItem.code || codeItem}</span>
+                        {codeItem.description && (
+                          <>
+                            <span className="text-xs">-</span>
+                            <span className="text-xs">{codeItem.description.substring(0, 40)}...</span>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeCode('diagnosis', codeItem.code || codeItem)}
+                          className="ml-2 text-blue-600 hover:text-blue-900 font-bold"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="space-y-2 col-span-2">
-                <Label>Diagnosis Description *</Label>
-                <Input 
-                  placeholder="Description of diagnosis" 
-                  value={newClaim.diagnosis_description}
-                  onChange={(e) => setNewClaim({...newClaim, diagnosis_description: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Procedure Description</Label>
-                <Input 
-                  placeholder="Description of procedure" 
-                  value={newClaim.procedure_description}
-                  onChange={(e) => setNewClaim({...newClaim, procedure_description: e.target.value})}
-                />
+                <Label>Procedure Codes (Click Medical Codes Reference to add)</Label>
+                <div className="border rounded-md p-3 min-h-[60px] flex flex-wrap gap-2">
+                  {newClaim.procedure_codes.length === 0 ? (
+                    <span className="text-gray-400 text-sm">No procedure codes added. Use Medical Codes Reference button above.</span>
+                  ) : (
+                    newClaim.procedure_codes.map((codeItem) => (
+                      <Badge 
+                        key={codeItem.code || codeItem}
+                        variant="default"
+                        className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 hover:bg-green-200"
+                      >
+                        <span className="font-semibold">{codeItem.code || codeItem}</span>
+                        {codeItem.description && (
+                          <>
+                            <span className="text-xs">-</span>
+                            <span className="text-xs">{codeItem.description.substring(0, 40)}...</span>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeCode('procedure', codeItem.code || codeItem)}
+                          className="ml-2 text-green-600 hover:text-green-900 font-bold"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Amount Requested *</Label>
@@ -568,6 +876,7 @@ function ProviderDashboard() {
                 <Input 
                   type="date" 
                   value={newClaim.date_of_service}
+                  max={new Date().toISOString().split('T')[0]} // Prevent future dates
                   onChange={(e) => setNewClaim({...newClaim, date_of_service: e.target.value})}
                 />
               </div>
@@ -595,14 +904,35 @@ function ProviderDashboard() {
               </div>
             </div>
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowSubmitClaim(false)}>
+              <Button variant="outline" onClick={() => {
+                setNewClaim({
+                  patient_name: '',
+                  insurance_id: '',
+                  diagnosis_codes: [],
+                  procedure_codes: [],
+                  amount_requested: '',
+                  date_of_service: '',
+                  notes: '',
+                  priority: 'medium'
+                });
+                setSelectedClaim(null);
+                setShowSubmitClaim(false);
+              }}>
                 Cancel
               </Button>
               <Button 
                 onClick={handleSubmitClaim}
+                disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {selectedClaim && selectedClaim.id ? 'Update Claim' : 'Submit Claim'}
+                {loading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>{selectedClaim && selectedClaim.id ? 'Updating...' : 'Submitting...'}</span>
+                  </div>
+                ) : (
+                  selectedClaim && selectedClaim.id ? 'Update Claim' : 'Submit Claim'
+                )}
               </Button>
             </div>
           </DialogContent>
@@ -779,9 +1109,22 @@ function ProviderDashboard() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Recent Claims</CardTitle>
-                <Badge className="bg-blue-100 text-blue-800">
-                  {filteredClaims.length} claims
-                </Badge>
+                <div className="flex items-center space-x-3">
+                  <Badge className="bg-blue-100 text-blue-800">
+                    {filteredClaims.length} claims
+                  </Badge>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setShowAllClaims(true);
+                      setCurrentPage(1);
+                    }}
+                    className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                  >
+                    View All
+                  </Button>
+                </div>
               </div>
               <CardDescription>
                 Manage and track your submitted claims
@@ -820,17 +1163,14 @@ function ProviderDashboard() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredClaims.slice(0, 10).map((claim) => (
+                      filteredClaims.slice(0, 5).map((claim) => (
                         <TableRow key={claim.id} className="hover:bg-gray-50">
                           <TableCell className="text-blue-600 font-medium">{claim.claim_number}</TableCell>
                           <TableCell>
-                            <div>
-                              <p className="text-gray-900">{claim.patient_name || 'N/A'}</p>
-                              <p className="text-xs text-gray-500">ID: {claim.patient}</p>
-                            </div>
+                            <p className="text-gray-900">{claim.patient_name || 'N/A'}</p>
                           </TableCell>
                           <TableCell className="text-gray-700 max-w-xs truncate">{claim.diagnosis_description}</TableCell>
-                          <TableCell className="text-gray-900 font-medium">{formatCurrency(claim.amount)}</TableCell>
+                          <TableCell className="text-gray-900 font-medium">{formatCurrency(claim.amount_requested)}</TableCell>
                           <TableCell>{getStatusBadge(claim.status)}</TableCell>
                           <TableCell className="text-gray-500">
                             {new Date(claim.date_submitted).toLocaleDateString()}
@@ -940,9 +1280,156 @@ function ProviderDashboard() {
         </div>
       </div>
 
+      {/* View All Claims Dialog */}
+      <Dialog open={showAllClaims} onOpenChange={() => {}}>
+        <div className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogContent className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] max-w-[95vw] w-full max-h-[90vh] rounded-2xl bg-white shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>All Claims</DialogTitle>
+            <DialogDescription>
+              Complete list of all submitted claims
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden flex flex-col py-4">
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm text-gray-600">Show:</Label>
+                  <select 
+                    value={claimsPerPage} 
+                    onChange={(e) => {
+                      setClaimsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                  </select>
+                  <span className="text-sm text-gray-600">
+                    out of {filteredClaims.length} claims
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">
+                  Page {currentPage} of {Math.ceil(filteredClaims.length / claimsPerPage) || 1}
+                </span>
+                <div className="flex space-x-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.min(Math.ceil(filteredClaims.length / claimsPerPage), currentPage + 1))}
+                    disabled={currentPage >= Math.ceil(filteredClaims.length / claimsPerPage)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex-1 rounded-xl border border-gray-200 overflow-hidden">
+              <div className="max-h-[60vh] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10">
+                    <TableRow className="bg-gray-50">
+                      <TableHead>Claim ID</TableHead>
+                      <TableHead>Patient</TableHead>
+                      <TableHead>Diagnosis</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClaims.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-12">
+                          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No claims found</h3>
+                          <p className="text-gray-500 mb-4">
+                            {searchTerm ? 'No claims match your search criteria.' : 'You haven\'t submitted any claims yet.'}
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (() => {
+                        const startIndex = (currentPage - 1) * claimsPerPage;
+                        const endIndex = startIndex + claimsPerPage;
+                        const paginatedClaims = filteredClaims.slice(startIndex, endIndex);
+                        
+                        return paginatedClaims.map((claim) => (
+                        <TableRow key={claim.id} className="hover:bg-gray-50">
+                          <TableCell className="text-blue-600 font-medium">{claim.claim_number}</TableCell>
+                          <TableCell>
+                            <p className="text-gray-900">{claim.patient_name || 'N/A'}</p>
+                          </TableCell>
+                          <TableCell className="text-gray-700 max-w-xs truncate">{claim.diagnosis_description}</TableCell>
+                          <TableCell className="text-gray-900 font-medium">{formatCurrency(claim.amount_requested)}</TableCell>
+                          <TableCell>{getStatusBadge(claim.status)}</TableCell>
+                          <TableCell className="text-gray-500">
+                            {new Date(claim.date_submitted).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-1">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 hover:bg-blue-50"
+                                onClick={() => {
+                                  handleViewClaim(claim);
+                                  setShowAllClaims(false);
+                                }}
+                                title="View Details"
+                              >
+                                <Eye className="h-4 w-4 text-blue-600" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 hover:bg-blue-50"
+                                onClick={() => {
+                                  handleEditClaim(claim);
+                                  setShowAllClaims(false);
+                                }}
+                                title="Edit Claim"
+                              >
+                                <Edit className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        ));
+                      })()
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            <div className="flex justify-end pt-4">
+              <Button variant="outline" onClick={() => setShowAllClaims(false)} className="bg-red-50 border-red-300 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800">
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Claim Details Dialog */}
       {selectedClaim && (
-        <Dialog open={showClaimDetails} onOpenChange={setShowClaimDetails}>
+        <Dialog open={showClaimDetails} onOpenChange={() => {}}>
           <DialogContent className="max-w-4xl rounded-2xl">
             <DialogHeader>
               <DialogTitle>Claim Details - {selectedClaim.claim_number}</DialogTitle>
@@ -953,12 +1440,20 @@ function ProviderDashboard() {
             <div className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <Label className="text-sm text-gray-600">Patient ID</Label>
-                  <p className="text-gray-900">{selectedClaim.patient}</p>
+                  <Label className="text-sm text-gray-600">Patient Name</Label>
+                  <p className="text-gray-900">{selectedClaim.patient_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-600">Claim ID</Label>
+                  <p className="text-gray-900">{selectedClaim.claim_number || selectedClaim.id || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-gray-600">Status</Label>
                   <div className="mt-1">{getStatusBadge(selectedClaim.status)}</div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-600">Insurance ID</Label>
+                  <p className="text-gray-900">{selectedClaim.insurance_id || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-gray-600">Amount Requested</Label>
@@ -967,16 +1462,41 @@ function ProviderDashboard() {
                 <div>
                   <Label className="text-sm text-gray-600">Amount Approved</Label>
                   <p className="text-gray-900 font-medium">
-                    {selectedClaim.amount_approved ? formatCurrency(selectedClaim.amount_approved) : 'N/A'}
+                    {selectedClaim.amount_approved ? formatCurrency(selectedClaim.amount_approved) : 
+                     selectedClaim.approved_amount ? formatCurrency(selectedClaim.approved_amount) :
+                     selectedClaim.status === 'approved' ? formatCurrency(selectedClaim.amount_requested) :
+                     'Pending Review'}
                   </p>
                 </div>
                 <div className="col-span-2">
                   <Label className="text-sm text-gray-600">Diagnosis</Label>
-                  <p className="text-gray-900">{selectedClaim.diagnosis_description}</p>
+                  <p className="text-gray-900">{selectedClaim.diagnosis_description || 'N/A'}</p>
+                  {selectedClaim.diagnosis_codes && selectedClaim.diagnosis_codes.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Codes: {Array.isArray(selectedClaim.diagnosis_codes) ? selectedClaim.diagnosis_codes.join(', ') : selectedClaim.diagnosis_codes}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <Label className="text-sm text-gray-600">Procedure</Label>
                   <p className="text-gray-900">{selectedClaim.procedure_description || 'N/A'}</p>
+                  {selectedClaim.procedure_codes && selectedClaim.procedure_codes.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Codes: {Array.isArray(selectedClaim.procedure_codes) ? selectedClaim.procedure_codes.join(', ') : selectedClaim.procedure_codes}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-600">Date Submitted</Label>
+                  <p className="text-gray-900">
+                    {selectedClaim.date_submitted ? new Date(selectedClaim.date_submitted).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-600">Date of Service</Label>
+                  <p className="text-gray-900">
+                    {selectedClaim.date_of_service ? new Date(selectedClaim.date_of_service).toLocaleDateString() : 'N/A'}
+                  </p>
                 </div>
                 {selectedClaim.notes && (
                   <div className="col-span-2">
@@ -984,10 +1504,22 @@ function ProviderDashboard() {
                     <p className="text-gray-900">{selectedClaim.notes}</p>
                   </div>
                 )}
+                {selectedClaim.provider_name && (
+                  <div className="col-span-2">
+                    <Label className="text-sm text-gray-600">Provider</Label>
+                    <p className="text-gray-900">{selectedClaim.provider_name}</p>
+                  </div>
+                )}
+                {selectedClaim.payor_name && (
+                  <div className="col-span-2">
+                    <Label className="text-sm text-gray-600">Insurance Payor</Label>
+                    <p className="text-gray-900">{selectedClaim.payor_name}</p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setShowClaimDetails(false)}>
+              <Button variant="outline" onClick={() => setShowClaimDetails(false)} className="bg-red-50 border-red-300 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800">
                 Close
               </Button>
             </div>
@@ -996,7 +1528,7 @@ function ProviderDashboard() {
       )}
 
       {/* All Notifications Dialog */}
-      <Dialog open={showAllNotifications} onOpenChange={setShowAllNotifications}>
+      <Dialog open={showAllNotifications} onOpenChange={() => {}}>
         <DialogContent className="max-w-2xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
