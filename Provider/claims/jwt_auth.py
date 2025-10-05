@@ -32,29 +32,44 @@ def mongo_token_obtain(request):
     """
     Custom JWT token obtain view that authenticates against MongoDB
     POST /api/auth/token/
-    Body: {"username": "provider2", "password": "password@123"}
+    Body: {"username": "provider2", "password": "password@123", "role": "provider"} or {"username": "email@example.com", "password": "password@123", "role": "patient"}
     Returns: {"access": "...", "refresh": "...", "user": {...}}
+    Note: 'username' field can accept either username or email address
+    Note: 'role' field must match the user's actual role in the database
     """
     try:
         username = request.data.get('username')
         password = request.data.get('password')
+        role = request.data.get('role')  # Get the selected role from frontend
         
         if not username or not password:
             return Response({
                 'error': 'Username and password required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        logger.info(f"JWT login attempt for: {username}")
-        
-        # Authenticate against MongoDB
-        try:
-            user = MongoUser.objects.get(username=username)
-            logger.info(f"Found MongoDB user: {username}")
-        except MongoUser.DoesNotExist:
-            logger.error(f"User not found: {username}")
+        if not role:
             return Response({
-                'error': 'Invalid credentials'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+                'error': 'Role selection required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"JWT login attempt for: {username} as role: {role}")
+        
+        # Authenticate against MongoDB - check both username and email
+        user = None
+        try:
+            # First try to find by username
+            user = MongoUser.objects.get(username=username)
+            logger.info(f"Found MongoDB user by username: {username}")
+        except MongoUser.DoesNotExist:
+            try:
+                # If not found by username, try by email
+                user = MongoUser.objects.get(email=username)
+                logger.info(f"Found MongoDB user by email: {username}")
+            except MongoUser.DoesNotExist:
+                logger.error(f"User not found by username or email: {username}")
+                return Response({
+                    'error': 'Invalid credentials'
+                }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Verify password (check both hashed and plain text)
         from django.contrib.auth.hashers import check_password
@@ -72,19 +87,26 @@ def mongo_token_obtain(request):
             logger.warning(f"User {username} using plain text password - should be hashed!")
         
         if not password_valid:
-            logger.error(f"Invalid password for user: {username}")
+            logger.error(f"Invalid password for user: {user.username}")
             return Response({
                 'error': 'Invalid credentials'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Validate role matches user's actual role
+        if user.role != role:
+            logger.error(f"Role mismatch for user {user.username}: requested {role}, actual {user.role}")
+            return Response({
+                'error': f'Invalid credentials. You cannot login as {role} with this account.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Create Django User object in memory (for JWT compatibility)
         from django.contrib.auth import get_user_model
         DjangoUser = get_user_model()
         
-        # Try to get or create Django user
+        # Try to get or create Django user using the actual username from MongoDB
         try:
             django_user, created = DjangoUser.objects.get_or_create(
-                username=username,
+                username=user.username,  # Use actual username from MongoDB user
                 defaults={
                     'email': user.email,
                     'first_name': user.first_name,
@@ -94,12 +116,12 @@ def mongo_token_obtain(request):
             if created:
                 django_user.set_password(password)
                 django_user.save()
-                logger.info(f"Created Django user for: {username}")
+                logger.info(f"Created Django user for: {user.username}")
         except Exception as e:
             logger.error(f"Error creating Django user: {e}")
             # Create a temporary user object for JWT
             django_user = DjangoUser(
-                username=username,
+                username=user.username,  # Use actual username from MongoDB user
                 email=user.email,
                 first_name=user.first_name,
                 last_name=user.last_name
@@ -108,10 +130,10 @@ def mongo_token_obtain(request):
         
         # Generate JWT tokens
         refresh = RefreshToken.for_user(django_user)
-        refresh['username'] = username
+        refresh['username'] = user.username  # Use actual username from MongoDB user
         refresh['role'] = user.role
         
-        logger.info(f"JWT tokens generated for: {username}")
+        logger.info(f"JWT tokens generated for: {user.username}")
         
         return Response({
             'access': str(refresh.access_token),

@@ -54,6 +54,7 @@ class Claim(Document):
         ('pending', 'Pending'),
         ('under_review', 'Under Review'),
         ('approved', 'Approved'),
+        ('denied', 'Denied'),
         ('rejected', 'Rejected'),
         ('processing', 'Processing'),
         ('requires_review', 'Requires Review'),
@@ -103,6 +104,8 @@ class Claim(Document):
     # Financial information
     amount_requested = fields.DecimalField(min_value=0.01, precision=2)
     amount_approved = fields.DecimalField(min_value=0, precision=2)
+    approved_amount = fields.DecimalField(min_value=0, precision=2)  # From payor webhook
+    patient_responsibility = fields.DecimalField(min_value=0, precision=2, default=0)  # From payor
     
     # Status and priority
     status = fields.StringField(choices=STATUS_CHOICES, default='pending')
@@ -113,10 +116,20 @@ class Claim(Document):
     date_submitted = fields.DateTimeField(default=datetime.now)
     date_updated = fields.DateTimeField(default=datetime.now)
     date_processed = fields.DateTimeField()
+    approval_date = fields.DateTimeField()  # When approved by payor
+    denial_date = fields.DateTimeField()    # When denied by payor
+    
+    # Webhook and decision information
+    denial_reason = fields.StringField()    # Reason for denial from payor
+    review_reason = fields.StringField()    # Reason for manual review
+    estimated_review_time = fields.StringField()  # Estimated review time from payor
+    reviewer_contact = fields.StringField() # Contact info from payor reviewer
+    reason_code = fields.StringField()      # Approval/denial reason code
+    reviewer_id = fields.StringField()      # ID of reviewer (payor side)
     
     # Additional information
     notes = fields.StringField()
-    rejection_reason = fields.StringField()
+    rejection_reason = fields.StringField()  # Legacy field
     
     # Provider information
     provider_npi = fields.StringField(max_length=10)

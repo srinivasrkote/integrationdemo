@@ -24,15 +24,70 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Special handling for phone number - only allow digits
+    let processedValue = value;
+    if (name === 'phone') {
+      processedValue = value.replace(/\D/g, ''); // Remove all non-digit characters
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: processedValue
     }));
     setError(''); // Clear error when user types
     setSuccess(''); // Clear success message when user types
+    
+    // Clear field-specific errors
+    setFieldErrors(prev => ({
+      ...prev,
+      [name]: ''
+    }));
+    
+    // Real-time validation for specific fields
+    if (name === 'username') {
+      const usernameRegex = /^[a-zA-Z0-9_]+$/;
+      if (processedValue && !usernameRegex.test(processedValue)) {
+        setFieldErrors(prev => ({
+          ...prev,
+          username: 'Username can only contain letters, numbers, and underscores'
+        }));
+      }
+    } else if (name === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (processedValue && !emailRegex.test(processedValue)) {
+        setFieldErrors(prev => ({
+          ...prev,
+          email: 'Please enter a valid email address'
+        }));
+      }
+    } else if (name === 'date_of_birth') {
+      if (processedValue) {
+        const selectedDate = new Date(processedValue);
+        const currentDate = new Date();
+        currentDate.setHours(23, 59, 59, 999);
+        
+        if (selectedDate > currentDate) {
+          setFieldErrors(prev => ({
+            ...prev,
+            date_of_birth: 'Date of birth cannot be in the future'
+          }));
+        }
+      }
+    } else if (name === 'phone') {
+      if (processedValue) {
+        if (processedValue.length !== 10) {
+          setFieldErrors(prev => ({
+            ...prev,
+            phone: 'Phone number must be exactly 10 digits'
+          }));
+        }
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -51,6 +106,58 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
     // Validate password strength
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate date of birth (should not be in the future)
+    if (formData.date_of_birth) {
+      const selectedDate = new Date(formData.date_of_birth);
+      const currentDate = new Date();
+      currentDate.setHours(23, 59, 59, 999); // Set to end of today
+      
+      if (selectedDate > currentDate) {
+        setError('Date of birth cannot be in the future');
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Validate username format (no spaces, special characters)
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(formData.username)) {
+      setError('Username can only contain letters, numbers, and underscores');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate phone number format (if provided)
+    if (formData.phone) {
+      const digitsOnly = formData.phone.replace(/\D/g, '');
+      if (formData.phone !== digitsOnly) {
+        setError('Phone number can only contain numbers');
+        setIsLoading(false);
+        return;
+      }
+      if (digitsOnly.length !== 10) {
+        setError('Phone number must be exactly 10 digits');
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Check if there are any field-specific errors
+    const hasFieldErrors = Object.values(fieldErrors).some(error => error !== '');
+    if (hasFieldErrors) {
+      setError('Please fix the errors above before submitting');
       setIsLoading(false);
       return;
     }
@@ -92,7 +199,26 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
       
     } catch (err) {
       console.error('Registration failed:', err);
-      setError(err.message || 'Registration failed. Please try again.');
+      
+      // Handle specific error messages from backend
+      let errorMessage = err.message || 'Registration failed. Please try again.';
+      
+      // Make error messages more user-friendly
+      if (errorMessage.includes('Username already exists')) {
+        errorMessage = 'This username is already taken. Please choose a different username.';
+      } else if (errorMessage.includes('Email already exists')) {
+        errorMessage = 'An account with this email address already exists. Please use a different email or try logging in.';
+      } else if (errorMessage.includes('Date of birth cannot be in the future')) {
+        errorMessage = 'Date of birth cannot be in the future. Please select a valid date.';
+      } else if (errorMessage.includes('Invalid date format')) {
+        errorMessage = 'Please enter a valid date of birth.';
+      } else if (errorMessage.includes('Phone number can only contain numbers')) {
+        errorMessage = 'Phone number can only contain numbers (0-9).';
+      } else if (errorMessage.includes('Phone number must be exactly 10 digits')) {
+        errorMessage = 'Phone number must be exactly 10 digits long.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -225,10 +351,13 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
                       value={formData.username}
                       onChange={handleInputChange}
                       required
-                      className="h-12 pl-11"
+                      className={`h-12 pl-11 ${fieldErrors.username ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Choose a username"
                     />
                   </div>
+                  {fieldErrors.username && (
+                    <p className="text-sm text-red-600 mt-1">{fieldErrors.username}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -242,10 +371,13 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
                       value={formData.email}
                       onChange={handleInputChange}
                       required
-                      className="h-12 pl-11"
+                      className={`h-12 pl-11 ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Enter your email"
                     />
                   </div>
+                  {fieldErrors.email && (
+                    <p className="text-sm text-red-600 mt-1">{fieldErrors.email}</p>
+                  )}
                 </div>
               </div>
 
@@ -310,10 +442,16 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
                       type="tel"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="h-12 pl-11"
-                      placeholder="(555) 123-4567"
+                      className={`h-12 pl-11 ${fieldErrors.phone ? 'border-red-500 focus:border-red-500' : ''}`}
+                      placeholder="1234567890"
+                      maxLength="10"
+                      pattern="[0-9]*"
+                      inputMode="numeric"
                     />
                   </div>
+                  {fieldErrors.phone && (
+                    <p className="text-sm text-red-600 mt-1">{fieldErrors.phone}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -326,9 +464,13 @@ export default function RegisterForm({ onRegister, onBackToLogin }) {
                       type="date"
                       value={formData.date_of_birth}
                       onChange={handleInputChange}
-                      className="h-12 pl-11"
+                      max={new Date().toISOString().split('T')[0]}
+                      className={`h-12 pl-11 ${fieldErrors.date_of_birth ? 'border-red-500 focus:border-red-500' : ''}`}
                     />
                   </div>
+                  {fieldErrors.date_of_birth && (
+                    <p className="text-sm text-red-600 mt-1">{fieldErrors.date_of_birth}</p>
+                  )}
                 </div>
               </div>
 

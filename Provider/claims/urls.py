@@ -15,7 +15,8 @@ from .mongo_views import (
     MongoRegisterView,
     mongo_register_user,
     MongoDashboardStatsView,
-    MongoUserProfileView
+    MongoUserProfileView,
+    MongoPasswordResetView
 )
 from .payor_views import (
     PayorIntegrationView,
@@ -29,6 +30,14 @@ from .provider_payor_views import (
     test_payor_connection,
     update_payor_configuration,
     sync_all_claims_status
+)
+from .webhook_views import (
+    payor_claim_approved,
+    payor_claim_denied,
+    payor_claim_under_review,
+    PayorWebhookView,
+    webhook_health_check,
+    webhook_test_endpoint
 )
 from .jwt_auth import (
     mongo_token_obtain,
@@ -54,6 +63,7 @@ urlpatterns = [
     path('mongo/auth/', MongoAuthView.as_view(), name='mongo-auth'),
     path('mongo/register/', MongoRegisterView.as_view(), name='mongo-register'),
     path('mongo/register-test/', mongo_register_user, name='mongo-register-test'),
+    path('mongo/password-reset/', MongoPasswordResetView.as_view(), name='mongo-password-reset'),
     path('mongo/claims/', MongoClaimListView.as_view(), name='mongo-claims-list'),
     path('mongo/claims/<str:claim_id>/', MongoClaimDetailView.as_view(), name='mongo-claim-detail'),
     path('mongo/users/', MongoUserListView.as_view(), name='mongo-users-list'),
@@ -73,4 +83,12 @@ urlpatterns = [
     path('provider/test-connection/', test_payor_connection, name='provider-test-connection'),
     path('provider/update-config/', update_payor_configuration, name='provider-update-config'),
     path('provider/sync-claims/', sync_all_claims_status, name='provider-sync-claims'),
+    
+    # Webhook endpoints for receiving payor notifications
+    path('webhooks/payor/claim-approved/', payor_claim_approved, name='webhook-claim-approved'),
+    path('webhooks/payor/claim-denied/', payor_claim_denied, name='webhook-claim-denied'),
+    path('webhooks/payor/claim-under-review/', payor_claim_under_review, name='webhook-claim-under-review'),
+    path('webhooks/payor/', PayorWebhookView.as_view(), name='webhook-payor-generic'),
+    path('webhooks/health/', webhook_health_check, name='webhook-health'),
+    path('webhooks/test/', webhook_test_endpoint, name='webhook-test'),
 ]

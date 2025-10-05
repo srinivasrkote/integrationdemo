@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Search, BookOpen, Stethoscope, Activity } from 'lucide-react';
+import { Search, BookOpen, Stethoscope, Activity, X } from 'lucide-react';
 
 const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,9 +107,9 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
     return colors[category] || 'bg-gray-100 text-gray-800';
   };
 
-  const handleCodeClick = (code, description, type) => {
+  const handleCodeClick = (code, description, type, price = null) => {
     if (onCodeSelect) {
-      onCodeSelect({ code, description, type });
+      onCodeSelect({ code, description, type, price });
     }
   };
 
@@ -128,10 +128,20 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Stethoscope className="w-5 h-5 text-blue-600" />
-            Medical Codes Cheatsheet
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="w-5 h-5 text-blue-600" />
+              Medical Codes Cheatsheet
+            </DialogTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-6 w-6 hover:bg-red-100 hover:text-red-600 transition-colors" 
+              onClick={() => setOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
           <DialogDescription>
             Quick reference for ICD-10 diagnosis codes and CPT procedure codes. Click a code to use it.
           </DialogDescription>
@@ -151,12 +161,18 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="icd10" className="flex items-center gap-2">
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-lg">
+              <TabsTrigger 
+                value="icd10" 
+                className="flex items-center gap-2 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+              >
                 <Activity className="w-4 h-4" />
                 ICD-10 Diagnosis ({filteredICD10.length})
               </TabsTrigger>
-              <TabsTrigger value="cpt" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="cpt" 
+                className="flex items-center gap-2 transition-all duration-200 hover:bg-green-100 hover:text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+              >
                 <Stethoscope className="w-4 h-4" />
                 CPT Procedures ({filteredCPT.length})
               </TabsTrigger>
@@ -170,13 +186,13 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
                     International Classification of Diseases, 10th Revision
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto">
+                <CardContent className="flex-1 overflow-y-auto max-h-96 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   <div className="space-y-2">
                     {filteredICD10.map((item, index) => (
                       <div 
                         key={index} 
-                        className="p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
-                        onClick={() => handleCodeClick(item.code, item.description, 'icd10')}
+                        className="p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-400 hover:shadow-md cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+                        onClick={() => handleCodeClick(item.code, item.description, 'icd10', null)}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
@@ -209,13 +225,13 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
                     Current Procedural Terminology codes with typical pricing
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto">
+                <CardContent className="flex-1 overflow-y-auto max-h-96 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   <div className="space-y-2">
                     {filteredCPT.map((item, index) => (
                       <div 
                         key={index} 
-                        className="p-3 border rounded-lg hover:bg-green-50 hover:border-green-300 cursor-pointer transition-colors"
-                        onClick={() => handleCodeClick(item.code, item.description, 'cpt')}
+                        className="p-3 border rounded-lg hover:bg-green-50 hover:border-green-400 hover:shadow-md cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+                        onClick={() => handleCodeClick(item.code, item.description, 'cpt', item.price)}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
@@ -245,12 +261,6 @@ const MedicalCodesCheatsheet = ({ trigger, onCodeSelect }) => {
               </Card>
             </TabsContent>
           </Tabs>
-        </div>
-
-        <div className="pt-4 border-t">
-          <p className="text-xs text-gray-500 text-center">
-            💡 Tip: Click on any code to auto-fill it in your claim form
-          </p>
         </div>
       </DialogContent>
     </Dialog>

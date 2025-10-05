@@ -29,6 +29,11 @@ class ApiService {
     localStorage.removeItem('user');
   }
 
+  // Alias for clearTokens (for compatibility)
+  clearCredentials() {
+    this.clearTokens();
+  }
+
   // Refresh access token
   async refreshAccessToken() {
     const refreshToken = this.getRefreshToken();
@@ -118,9 +123,9 @@ class ApiService {
   }
 
   // Authentication with JWT
-  async login(username, password) {
+  async login(username, password, role) {
     try {
-      console.log('🔐 JWT Login attempt for:', username);
+      console.log('🔐 JWT Login attempt for:', username, 'as role:', role);
       console.log('🌐 Making request to:', `${this.baseURL}/auth/token/`);
       
       const response = await fetch(`${this.baseURL}/auth/token/`, {
@@ -128,18 +133,46 @@ class ApiService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role }),
       });
 
       console.log('📡 Response status:', response.status);
+      
+      // Get response text first
+      const responseText = await response.text();
+      console.log('📄 Response text:', responseText);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Login failed - Error data:', errorData);
-        throw new Error(errorData.error || 'Invalid credentials');
+        let errorMessage = 'Invalid credentials';
+        
+        // Try to parse error response as JSON
+        if (responseText) {
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorData.detail || errorData.message || 'Invalid credentials';
+          } catch (parseError) {
+            console.warn('⚠️ Could not parse error response as JSON:', parseError);
+            errorMessage = responseText || 'Invalid credentials';
+          }
+        }
+        
+        console.error('❌ Login failed - Error:', errorMessage);
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Try to parse success response as JSON
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Could not parse success response as JSON:', parseError);
+        throw new Error('Invalid response format from server');
+      }
+      
       console.log('✅ Login successful - JWT tokens received');
       
       // Store tokens
@@ -207,6 +240,54 @@ class ApiService {
   async logout() {
     this.clearTokens();
     return Promise.resolve();
+  }
+
+  // Password Reset
+  async resetPassword(emailOrUsername, newPassword) {
+    try {
+      console.log('Sending password reset request for:', emailOrUsername);
+      
+      const response = await fetch(`${this.baseURL}/mongo/password-reset/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailOrUsername: emailOrUsername,
+          newPassword: newPassword
+        }),
+      });
+
+      console.log('Password reset response status:', response.status);
+
+      // Get response text first
+      const responseText = await response.text();
+      console.log('Password reset response text:', responseText);
+
+      if (!response.ok) {
+        let errorMessage = 'Password reset failed';
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          // If we can't parse JSON, use the raw text
+          errorMessage = responseText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Try to parse the successful response
+      try {
+        const data = JSON.parse(responseText);
+        return data;
+      } catch (jsonError) {
+        console.error('Failed to parse success response:', jsonError);
+        throw new Error('Invalid response format from server');
+      }
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
+    }
   }
 
   // MongoDB User Profile
